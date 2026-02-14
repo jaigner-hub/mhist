@@ -91,7 +91,7 @@
       "Verify: go build ./... compiles without error",
       "Verify: go vet ./..."
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 7,

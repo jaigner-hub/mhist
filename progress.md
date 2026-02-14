@@ -32,3 +32,15 @@
 - Parses `ESC [ < button ; col ; row M/m` format, returns bytes consumed
 - Created `mouse_test.go` with 11 tests: scroll up/down, left/middle/right click, release, incomplete, too short, invalid, trailing data, bad params
 - All tests pass (31 total across all test files)
+
+### Iteration 6 — Task 6: Session Process
+- Created `session.go` with `Session` struct: PTY management, scrollback buffer (10k lines), Unix socket listener
+- `NewSession`: allocates PTY, starts shell, creates socket at `socketDir()/<id>.sock`, writes `<id>.json` info file
+- Accepts one client at a time (rejects additional with error)
+- Reads PTY output: feeds to buffer + forwards to connected client as MsgData
+- Handles messages: MsgData→PTY, MsgResize→resize PTY, MsgDetach→close client, MsgKill→kill shell
+- MsgHistoryRequest→respond with lines from buffer
+- Signal handling (SIGTERM/SIGINT) for clean shutdown
+- Cleanup removes socket and info files
+- Wired `runSession` in `main.go` to use `NewSession` + `Run`
+- Compiles and passes `go vet`

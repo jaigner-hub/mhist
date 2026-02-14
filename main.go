@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -82,7 +83,12 @@ func main() {
 // Placeholder implementations — these will be filled in by later tasks.
 
 func runSession(id, name string) {
-	fmt.Fprintf(os.Stderr, "session mode: id=%s name=%s\n", id, name)
+	log.Printf("session starting: id=%s name=%s", id, name)
+	sess, err := NewSession(id, name, "")
+	if err != nil {
+		log.Fatalf("failed to create session: %v", err)
+	}
+	sess.Run()
 }
 
 func cmdNew(name string) {
