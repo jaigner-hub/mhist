@@ -138,7 +138,7 @@
       "Implement 'mhist kill [name|id]': find session, connect to socket, send MsgKill, or fallback to os.Kill",
       "Verify: start a session, run ./mhist ls, kill it with ./mhist kill <id>, confirm ls shows nothing"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 10,

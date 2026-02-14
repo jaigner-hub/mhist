@@ -55,6 +55,13 @@
 - Used `crypto/rand` for UUID generation (no external dependency)
 - `./mhist ls` works, `make build` succeeds, all tests pass
 
+### Iteration 9 — Task 9: List and Kill Commands
+- Already implemented in Task 8 as part of full `cmdList` and `cmdKill` implementation
+- `cmdList`: scans info files, displays table with short ID, name, created, status (alive/dead)
+- `cmdKill`: finds session, sends MsgKill via socket, falls back to os.Kill, cleans up stale files
+- `listSessions` cleans stale files automatically
+- Verified: `./mhist ls` displays header, all tests pass
+
 ### Iteration 7 — Task 7: Client
 - Created `client.go` with `Client` struct: Unix socket connect, raw mode, I/O relay
 - `relayStdin`: prefix key handling (Ctrl+a d=detach, Ctrl+a Ctrl+a=literal), mouse sequence forwarding
