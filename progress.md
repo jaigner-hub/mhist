@@ -111,6 +111,24 @@
 
 --- Tasks 1-15 complete. Starting fix cycle for reattach display + scrollback history (tasks 16-19). ---
 
+### Iteration 16 — Task 16: GetPartial() method for ScrollbackBuffer
+- Added `GetPartial()` method to `buffer.go`: returns a copy of the current partial line, or nil if empty
+- Added 3 tests to `buffer_test.go`: `TestBufferGetPartial` (partial data present), `TestBufferGetPartialEmpty` (fresh buffer), `TestBufferGetPartialAfterNewline` (after complete line)
+- All 34 tests pass (12 buffer, 11 mouse, 11 protocol), `go vet` clean
+
+### Iteration 17 — Task 17: Raw PTY replay buffer for sendRedraw
+- Added `rawBuf []byte` (64KB), `rawHead int`, `rawLen int` to Session struct for circular raw PTY buffer
+- Initialized `rawBuf = make([]byte, 65536)` in NewSession
+- In `readPTY`, after `buffer.Write(data)`, appends each byte to rawBuf circular buffer
+- Rewrote `sendRedraw` to extract raw bytes from circular buffer, prepend clear screen escape, and send as single MsgData — no longer reconstructs from parsed lines
+- Build, vet, and all 34 tests pass
+
+### Iteration 18 — Task 18: Include partial line in history responses
+- In `handleHistoryRequest`, after building lines from `GetRange()`, checks if response includes the most recent lines
+- If so, calls `buffer.GetPartial()` and appends the partial line (current prompt) to the response data
+- This ensures the shell prompt appears in history scrollback and redraw responses
+- Build, vet, and all 34 tests pass
+
 ### Iteration 19 — Task 19: Final Verification (post-reattach fixes)
 - `make build` — produces `./mhist` binary
 - `make test` — all 34 unit tests pass (12 buffer, 11 mouse, 11 protocol)
@@ -120,29 +138,3 @@
 - All 19 tasks pass
 
 ALL_TASKS_COMPLETE
-
-### Iteration 18 — Task 18: Include partial line in history responses
-- In `handleHistoryRequest`, after building lines from `GetRange()`, checks if response includes the most recent lines
-- If so, calls `buffer.GetPartial()` and appends the partial line (current prompt) to the response data
-- This ensures the shell prompt appears in history scrollback and redraw responses
-- Build, vet, and all 34 tests pass
-
-### Iteration 17 — Task 17: Raw PTY replay buffer for sendRedraw
-- Added `rawBuf []byte` (64KB), `rawHead int`, `rawLen int` to Session struct for circular raw PTY buffer
-- Initialized `rawBuf = make([]byte, 65536)` in NewSession
-- In `readPTY`, after `buffer.Write(data)`, appends each byte to rawBuf circular buffer
-- Rewrote `sendRedraw` to extract raw bytes from circular buffer, prepend clear screen escape, and send as single MsgData — no longer reconstructs from parsed lines
-- Build, vet, and all 34 tests pass
-
-### Iteration 16 — Task 16: GetPartial() method for ScrollbackBuffer
-- Added `GetPartial()` method to `buffer.go`: returns a copy of the current partial line, or nil if empty
-- Added 3 tests to `buffer_test.go`: `TestBufferGetPartial` (partial data present), `TestBufferGetPartialEmpty` (fresh buffer), `TestBufferGetPartialAfterNewline` (after complete line)
-- All 34 tests pass (12 buffer, 11 mouse, 11 protocol), `go vet` clean
-
-### Iteration 7 — Task 7: Client
-- Created `client.go` with `Client` struct: Unix socket connect, raw mode, I/O relay
-- `relayStdin`: prefix key handling (Ctrl+a d=detach, Ctrl+a Ctrl+a=literal), mouse sequence forwarding
-- `relaySocket`: decode messages, write MsgData to stdout
-- Sends initial MsgResize with terminal dimensions on connect
-- Clean restore: disable mouse mode, restore terminal state, close connection
-- Compiles and passes `go vet`

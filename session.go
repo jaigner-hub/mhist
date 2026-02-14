@@ -62,7 +62,7 @@ func NewSession(id, name, shell string) (*Session, error) {
 	}
 
 	cmd := exec.Command(shell)
-	cmd.Env = os.Environ()
+	cmd.Env = append(os.Environ(), "MHIST_SESSION="+id)
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
@@ -196,12 +196,9 @@ func (s *Session) acceptClients() {
 
 		s.clientMu.Lock()
 		if s.client != nil {
-			// Reject — already has a client
-			s.clientMu.Unlock()
-			errMsg := Encode(Message{Type: MsgData, Payload: []byte("session already attached\r\n")})
-			conn.Write(errMsg)
-			conn.Close()
-			continue
+			// Kick stale client — last connection wins
+			log.Printf("session %s: kicking existing client for new connection", s.id)
+			s.client.Close()
 		}
 		s.client = conn
 		s.clientMu.Unlock()

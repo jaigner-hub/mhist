@@ -70,8 +70,7 @@ func (c *Client) Run() error {
 		c.termCols = 80
 	}
 
-	// Enable mouse mode
-	enableMouseMode(os.Stdout)
+	// Mouse mode starts disabled (enables on scroll mode entry for copy/paste compat)
 
 	// Send initial resize
 	c.sendResize()
@@ -95,15 +94,15 @@ func (c *Client) Run() error {
 
 	// Wait for either goroutine to finish
 	<-c.done
+
+	// Unblock the other goroutine: close conn (unblocks relaySocket)
+	// and close stdin (unblocks relayStdin)
+	c.conn.Close()
+	os.Stdin.Close()
+
 	wg.Wait()
 
 	c.restore()
-
-	if c.detached {
-		fmt.Fprintf(os.Stderr, "detached from session %s\n", c.sessionName)
-	} else {
-		fmt.Fprintln(os.Stderr, "session ended")
-	}
 	return nil
 }
 
@@ -154,6 +153,13 @@ func (c *Client) relayStdin() {
 					encoded := Encode(Message{Type: MsgDetach, Payload: nil})
 					c.conn.Write(encoded)
 					return
+				case '[':
+					// Enter history/scroll mode
+					if !c.historyMode {
+						c.historyMode = true
+						c.historyOffset = scrollLines
+						c.requestHistory()
+					}
 				case 0x01:
 					// Send literal Ctrl+a
 					if c.historyMode {
@@ -172,20 +178,105 @@ func (c *Client) relayStdin() {
 				continue
 			}
 
-			// Check for mouse sequence starting at this position
+			// Ctrl+s toggles scroll/history mode
+			if b == 0x13 {
+				if c.historyMode {
+					c.exitHistoryMode()
+				} else {
+					c.historyMode = true
+					c.historyOffset = scrollLines
+					c.requestHistory()
+				}
+				continue
+			}
+
+			// Check for escape sequences starting at this position
 			remaining := buf[i:n]
-			if b == '\x1b' && len(remaining) >= 3 && remaining[1] == '[' && remaining[2] == '<' {
-				ev, consumed, ok := ParseSGRMouse(remaining)
-				if ok {
-					c.handleMouse(ev)
-					i += consumed - 1 // -1 because loop increments
+			if b == '\x1b' && len(remaining) >= 3 && remaining[1] == '[' {
+				// SGR mouse: ESC [ < ...
+				if remaining[2] == '<' {
+					ev, consumed, ok := ParseSGRMouse(remaining)
+					if ok {
+						c.handleMouse(ev)
+						i += consumed - 1 // -1 because loop increments
+						continue
+					}
+				}
+
+				// Page Up: ESC [ 5 ~
+				if len(remaining) >= 4 && remaining[2] == '5' && remaining[3] == '~' {
+					if !c.historyMode {
+						c.historyMode = true
+						c.historyOffset = c.termRows
+					} else {
+						c.historyOffset += c.termRows
+					}
+					c.requestHistory()
+					i += 3 // skip remaining 3 bytes of sequence
+					continue
+				}
+
+				// Page Down: ESC [ 6 ~
+				if len(remaining) >= 4 && remaining[2] == '6' && remaining[3] == '~' {
+					if c.historyMode {
+						c.historyOffset -= c.termRows
+						if c.historyOffset <= 0 {
+							c.exitHistoryMode()
+						} else {
+							c.requestHistory()
+						}
+					}
+					i += 3 // skip remaining 3 bytes of sequence
+					continue
+				}
+
+				// Arrow keys in history mode: Up (A) scrolls up, Down (B) scrolls down
+				if c.historyMode && (remaining[2] == 'A' || remaining[2] == 'B') {
+					if remaining[2] == 'A' {
+						c.historyOffset += scrollLines
+						c.requestHistory()
+					} else {
+						c.historyOffset -= scrollLines
+						if c.historyOffset <= 0 {
+							c.exitHistoryMode()
+						} else {
+							c.requestHistory()
+						}
+					}
+					i += 2 // skip remaining 2 bytes of sequence
 					continue
 				}
 			}
 
-			// Any non-mouse keypress in history mode → exit history mode
+			// History mode key bindings (vim-style)
 			if c.historyMode {
-				c.exitHistoryMode()
+				switch b {
+				case 'k': // up
+					c.historyOffset += scrollLines
+					c.requestHistory()
+				case 'j': // down
+					c.historyOffset -= scrollLines
+					if c.historyOffset <= 0 {
+						c.exitHistoryMode()
+					} else {
+						c.requestHistory()
+					}
+				case 'u': // half page up
+					c.historyOffset += c.termRows / 2
+					c.requestHistory()
+				case 'd': // half page down
+					c.historyOffset -= c.termRows / 2
+					if c.historyOffset <= 0 {
+						c.exitHistoryMode()
+					} else {
+						c.requestHistory()
+					}
+				case 'q', 0x1b: // q or Escape exits
+					c.exitHistoryMode()
+				default:
+					c.exitHistoryMode()
+				}
+				continue
 			}
 
 			// Regular data — forward to session
@@ -332,7 +423,6 @@ func (c *Client) signalDone() {
 
 // restore restores terminal state and disables mouse mode.
 func (c *Client) restore() {
-	disableMouseMode(os.Stdout)
 	fd := int(os.Stdin.Fd())
 	if c.oldState != nil {
 		restoreTerminal(fd, c.oldState)

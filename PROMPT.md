@@ -153,7 +153,7 @@ golang.org/x/term v0.27.0
 
 ## Completion Signal
 
-When ALL 15 tasks have `"passes": true` in tasks.json and final verification is done, write this exact line to progress.md:
+When ALL tasks (including 16-19) have `"passes": true` in tasks.json and final verification is done, write this exact line to progress.md:
 
 ```
 ALL_TASKS_COMPLETE

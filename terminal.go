@@ -17,14 +17,15 @@ func restoreTerminal(fd int, state *term.State) {
 	term.Restore(fd, state)
 }
 
-// enableMouseMode enables SGR mouse mode 1006.
+// enableMouseMode enables mouse button tracking with SGR encoding.
+// ?1000h enables basic mouse button reporting, ?1006h selects SGR format.
 func enableMouseMode(w io.Writer) {
-	io.WriteString(w, "\x1b[?1006h")
+	io.WriteString(w, "\x1b[?1000h\x1b[?1006h")
 }
 
-// disableMouseMode disables SGR mouse mode 1006.
+// disableMouseMode disables mouse tracking and SGR encoding.
 func disableMouseMode(w io.Writer) {
-	io.WriteString(w, "\x1b[?1006l")
+	io.WriteString(w, "\x1b[?1006l\x1b[?1000l")
 }
 
 // clearScreen clears the terminal screen and moves cursor to top-left.

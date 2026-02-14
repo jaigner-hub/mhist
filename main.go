@@ -146,25 +146,23 @@ func cmdAttach(target string) {
 
 func cmdDefault() {
 	sessions := listSessions()
-	if len(sessions) > 0 {
-		// Attach to most recent session
-		info := sessions[len(sessions)-1]
+	// Try to attach to most recent unoccupied session
+	for i := len(sessions) - 1; i >= 0; i-- {
+		info := sessions[i]
 		client, err := NewClient(info.Socket, info.ID, info.Name)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error connecting to session: %v\n", err)
-			os.Exit(1)
+			continue // can't connect, try next
 		}
 
 		if err := client.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			continue // session rejected us (already attached), try next
 		}
 
 		printExitMessage(client, info.Name)
 		return
 	}
 
-	// No sessions — create new
+	// No available sessions — create new
 	cmdNew("")
 }
 

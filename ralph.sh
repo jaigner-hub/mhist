@@ -31,6 +31,10 @@ warn() { echo -e "${YELLOW}[ralph]${NC} $1"; }
 error() { echo -e "${RED}[ralph]${NC} $1"; }
 success() { echo -e "${GREEN}[ralph]${NC} $1"; }
 
+# Always restore terminal on exit (claude can leave it in raw mode)
+trap 'stty sane 2>/dev/null || true' EXIT
+trap 'echo ""; warn "Interrupted."; exit 130' INT TERM
+
 # Check how many tasks pass / total
 check_tasks() {
     if [[ ! -f "$TASKS_FILE" ]]; then
@@ -87,11 +91,16 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
 
     # Run Claude
     log "Running claude --print (logging to $LOG_FILE)..."
-    if claude --print --dangerously-skip-permissions -p "$(cat "$PROMPT_FILE")" > "$LOG_FILE" 2>&1; then
+    CLAUDE_EXIT=0
+    claude --print --dangerously-skip-permissions -p "$(cat "$PROMPT_FILE")" > "$LOG_FILE" 2>&1 || CLAUDE_EXIT=$?
+
+    # Restore terminal — claude can leave it in raw/noecho mode
+    stty sane 2>/dev/null || true
+
+    if [[ $CLAUDE_EXIT -eq 0 ]]; then
         success "Iteration $i completed successfully"
     else
-        EXIT_CODE=$?
-        warn "Iteration $i exited with code $EXIT_CODE (see $LOG_FILE)"
+        warn "Iteration $i exited with code $CLAUDE_EXIT (see $LOG_FILE)"
     fi
 
     log "Progress: $(check_tasks) tasks passing"
