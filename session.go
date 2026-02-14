@@ -327,7 +327,7 @@ func (s *Session) handleHistoryRequest(conn net.Conn, payload []byte) {
 	conn.Write(resp)
 }
 
-// cleanup removes socket and info files.
+// cleanup removes socket and info files and reaps the child process.
 func (s *Session) cleanup() {
 	s.clientMu.Lock()
 	if s.client != nil {
@@ -338,6 +338,7 @@ func (s *Session) cleanup() {
 
 	s.listener.Close()
 	s.ptmx.Close()
+	s.cmd.Wait() // reap child process
 	os.Remove(s.socketPath)
 	os.Remove(s.infoPath)
 	log.Printf("session %s: cleaned up", s.id)

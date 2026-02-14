@@ -29,6 +29,9 @@ type Client struct {
 	historyOffset int // offset from end of buffer (0 = live)
 	termRows      int
 	termCols      int
+
+	// Exit state
+	detached    bool // true if client initiated detach
 }
 
 // NewClient connects to the session at the given socket path.
@@ -95,6 +98,12 @@ func (c *Client) Run() error {
 	wg.Wait()
 
 	c.restore()
+
+	if c.detached {
+		fmt.Fprintf(os.Stderr, "detached from session %s\n", c.sessionName)
+	} else {
+		fmt.Fprintln(os.Stderr, "session ended")
+	}
 	return nil
 }
 
@@ -141,6 +150,7 @@ func (c *Client) relayStdin() {
 				switch b {
 				case 'd':
 					// Detach
+					c.detached = true
 					encoded := Encode(Message{Type: MsgDetach, Payload: nil})
 					c.conn.Write(encoded)
 					return

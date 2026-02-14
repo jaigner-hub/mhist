@@ -195,7 +195,7 @@
       "Verify: start session, type 'exit' in shell, confirm session process exits and files are cleaned up",
       "Verify: ls shows no stale sessions after shell exit"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 14,

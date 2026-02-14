@@ -87,6 +87,14 @@
 - History response now includes 8-byte header (startLine + totalLines) for position tracking
 - Compiles, passes vet and all tests
 
+### Iteration 13 — Task 13: Session Cleanup and Client Notification
+- Session already detects shell exit via PTY EOF and cleans up socket + info files (from task 6)
+- Session already handles SIGTERM/SIGINT: kills shell, runs cleanup (from task 6)
+- Added `detached` field to Client to track detach vs unexpected disconnect
+- Client now prints "detached from session <name>" on Ctrl+a d
+- Client now prints "session ended" on unexpected connection close (shell exit)
+- Compiles, passes vet and all 31 tests
+
 ### Iteration 7 — Task 7: Client
 - Created `client.go` with `Client` struct: Unix socket connect, raw mode, I/O relay
 - `relayStdin`: prefix key handling (Ctrl+a d=detach, Ctrl+a Ctrl+a=literal), mouse sequence forwarding
