@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -288,14 +289,30 @@ func (s *Session) handleHistoryRequest(conn net.Conn, payload []byte) {
 	if len(payload) < 8 {
 		return
 	}
-	offset := int(payload[0])<<24 | int(payload[1])<<16 | int(payload[2])<<8 | int(payload[3])
-	count := int(payload[4])<<24 | int(payload[5])<<16 | int(payload[6])<<8 | int(payload[7])
+	rawOffset := binary.BigEndian.Uint32(payload[0:4])
+	count := int(binary.BigEndian.Uint32(payload[4:8]))
 
-	lines := s.buffer.GetRange(offset, count)
+	totalLines := s.buffer.Lines()
+	var start int
+
+	if rawOffset&0x80000000 != 0 {
+		// "From end" mode: offset is distance from end
+		fromEnd := int(rawOffset & 0x7FFFFFFF)
+		start = totalLines - fromEnd - count
+		if start < 0 {
+			start = 0
+		}
+	} else {
+		start = int(rawOffset)
+	}
+
+	lines := s.buffer.GetRange(start, count)
 	var result []byte
-	for _, line := range lines {
+	for i, line := range lines {
 		result = append(result, line...)
-		result = append(result, '\n')
+		if i < len(lines)-1 {
+			result = append(result, '\r', '\n')
+		}
 	}
 
 	resp := Encode(Message{Type: MsgHistoryResponse, Payload: result})

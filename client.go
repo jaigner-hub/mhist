@@ -10,14 +10,22 @@ import (
 	"golang.org/x/term"
 )
 
+const scrollLines = 3 // lines to scroll per mouse wheel event
+
 // Client connects to a session's Unix socket and relays I/O.
 type Client struct {
-	conn       net.Conn
-	oldState   *term.State
-	sessionID  string
+	conn        net.Conn
+	oldState    *term.State
+	sessionID   string
 	sessionName string
-	done       chan struct{}
-	once       sync.Once
+	done        chan struct{}
+	once        sync.Once
+
+	// History mode state
+	historyMode   bool
+	historyOffset int // offset from end of buffer (0 = live)
+	termRows      int
+	termCols      int
 }
 
 // NewClient connects to the session at the given socket path.
@@ -45,6 +53,16 @@ func (c *Client) Run() error {
 		return fmt.Errorf("enable raw mode: %w", err)
 	}
 	c.oldState = oldState
+
+	// Get terminal size
+	rows, cols, err := getTerminalSize(fd)
+	if err == nil {
+		c.termRows = rows
+		c.termCols = cols
+	} else {
+		c.termRows = 24
+		c.termCols = 80
+	}
 
 	// Enable mouse mode
 	enableMouseMode(os.Stdout)
@@ -74,7 +92,7 @@ func (c *Client) Run() error {
 	return nil
 }
 
-// relayStdin reads from stdin and sends to the session, handling prefix key.
+// relayStdin reads from stdin and sends to the session, handling prefix key and history.
 func (c *Client) relayStdin() {
 	defer c.signalDone()
 
@@ -100,6 +118,9 @@ func (c *Client) relayStdin() {
 					return
 				case 0x01:
 					// Send literal Ctrl+a
+					if c.historyMode {
+						c.exitHistoryMode()
+					}
 					encoded := Encode(Message{Type: MsgData, Payload: []byte{0x01}})
 					c.conn.Write(encoded)
 				default:
@@ -116,21 +137,95 @@ func (c *Client) relayStdin() {
 			// Check for mouse sequence starting at this position
 			remaining := buf[i:n]
 			if b == '\x1b' && len(remaining) >= 3 && remaining[1] == '[' && remaining[2] == '<' {
-				_, consumed, ok := ParseSGRMouse(remaining)
+				ev, consumed, ok := ParseSGRMouse(remaining)
 				if ok {
-					// Forward the entire mouse sequence as data
-					encoded := Encode(Message{Type: MsgData, Payload: remaining[:consumed]})
-					c.conn.Write(encoded)
+					c.handleMouse(ev)
 					i += consumed - 1 // -1 because loop increments
 					continue
 				}
 			}
 
-			// Regular data
+			// Any non-mouse keypress in history mode → exit history mode
+			if c.historyMode {
+				c.exitHistoryMode()
+			}
+
+			// Regular data — forward to session
 			encoded := Encode(Message{Type: MsgData, Payload: []byte{b}})
 			c.conn.Write(encoded)
 		}
 	}
+}
+
+// handleMouse processes a parsed mouse event.
+func (c *Client) handleMouse(ev MouseEvent) {
+	switch ev.Button {
+	case 64: // Scroll up
+		if !c.historyMode {
+			c.historyMode = true
+			c.historyOffset = scrollLines
+		} else {
+			c.historyOffset += scrollLines
+		}
+		c.requestHistory()
+
+	case 65: // Scroll down
+		if c.historyMode {
+			c.historyOffset -= scrollLines
+			if c.historyOffset <= 0 {
+				c.exitHistoryMode()
+				return
+			}
+			c.requestHistory()
+		}
+		// If not in history mode, ignore scroll down
+
+	default:
+		// Other mouse events in history mode → exit
+		if c.historyMode && ev.Press {
+			c.exitHistoryMode()
+		}
+	}
+}
+
+// requestHistory sends a history request to the session.
+func (c *Client) requestHistory() {
+	rows := c.termRows
+	if rows <= 0 {
+		rows = 24
+	}
+
+	// We want to request lines ending at (total - historyOffset)
+	// The session will figure out the actual range from offset+count
+	// We encode: offset from start = we don't know total, so we use a special
+	// encoding where we send negative offset meaning "from end"
+	// Actually, let's send the offset and count and let the session handle it
+	payload := make([]byte, 8)
+	// Use a sentinel: high bit set means "from end"
+	// offset = historyOffset (from end), count = rows
+	binary.BigEndian.PutUint32(payload[0:4], uint32(0x80000000|uint32(c.historyOffset)))
+	binary.BigEndian.PutUint32(payload[4:8], uint32(rows))
+
+	encoded := Encode(Message{Type: MsgHistoryRequest, Payload: payload})
+	c.conn.Write(encoded)
+}
+
+// exitHistoryMode returns to live output mode.
+func (c *Client) exitHistoryMode() {
+	c.historyMode = false
+	c.historyOffset = 0
+
+	// Request a "redraw" — offset 0x80000000 (from end, 0 offset = latest)
+	rows := c.termRows
+	if rows <= 0 {
+		rows = 24
+	}
+	payload := make([]byte, 8)
+	binary.BigEndian.PutUint32(payload[0:4], uint32(0x80000000))
+	binary.BigEndian.PutUint32(payload[4:8], uint32(rows))
+
+	encoded := Encode(Message{Type: MsgHistoryRequest, Payload: payload})
+	c.conn.Write(encoded)
 }
 
 // relaySocket reads messages from the session socket and writes to stdout.
@@ -145,6 +240,14 @@ func (c *Client) relaySocket() {
 
 		switch msg.Type {
 		case MsgData:
+			if !c.historyMode {
+				os.Stdout.Write(msg.Payload)
+			}
+			// In history mode, suppress live output
+
+		case MsgHistoryResponse:
+			// Render history on screen
+			clearScreen(os.Stdout)
 			os.Stdout.Write(msg.Payload)
 		}
 	}
@@ -152,15 +255,9 @@ func (c *Client) relaySocket() {
 
 // sendResize sends the current terminal dimensions to the session.
 func (c *Client) sendResize() {
-	fd := int(os.Stdout.Fd())
-	rows, cols, err := getTerminalSize(fd)
-	if err != nil {
-		return
-	}
-
 	payload := make([]byte, 4)
-	binary.BigEndian.PutUint16(payload[0:2], uint16(rows))
-	binary.BigEndian.PutUint16(payload[2:4], uint16(cols))
+	binary.BigEndian.PutUint16(payload[0:2], uint16(c.termRows))
+	binary.BigEndian.PutUint16(payload[2:4], uint16(c.termCols))
 
 	encoded := Encode(Message{Type: MsgResize, Payload: payload})
 	c.conn.Write(encoded)

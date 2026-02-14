@@ -69,6 +69,16 @@
 - Redraw clears screen and renders recent lines
 - Compiles, passes vet and all tests
 
+### Iteration 11 — Task 11: History Scrollback
+- Added history mode to client: scroll up (button 64) enters history mode, scroll down (button 65) goes forward
+- Client sends MsgHistoryRequest with "from end" offset encoding (high bit sentinel)
+- Session handles from-end offset, responds with MsgHistoryResponse containing buffer lines
+- History response clears screen and renders history lines
+- Any non-mouse keypress exits history mode, requests redraw of latest lines
+- Live output suppressed while in history mode
+- Scrolls 3 lines per wheel event
+- Compiles, passes vet and all tests
+
 ### Iteration 7 — Task 7: Client
 - Created `client.go` with `Client` struct: Unix socket connect, raw mode, I/O relay
 - `relayStdin`: prefix key handling (Ctrl+a d=detach, Ctrl+a Ctrl+a=literal), mouse sequence forwarding

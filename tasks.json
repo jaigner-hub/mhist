@@ -166,7 +166,7 @@
       "Any non-mouse keypress while in history mode: exit history mode, return to live output, forward the keypress",
       "Verify: start session, generate output (e.g. seq 1 1000), scroll up with mouse wheel, see earlier output, press key to return to live"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 12,
