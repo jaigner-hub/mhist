@@ -1,0 +1,231 @@
+[
+  {
+    "id": 1,
+    "category": "foundation",
+    "description": "Project setup: go mod init, main.go with CLI dispatch, Makefile",
+    "steps": [
+      "Run: go mod init mhist",
+      "Add dependencies: go get github.com/creack/pty@v1.1.24 && go get golang.org/x/term@v0.27.0",
+      "Create main.go with CLI dispatch: 'new [-n name]', 'attach [name|id]', 'ls', 'kill [name|id]', '--session-id=X' (internal)",
+      "Default behavior (no args): attach to last session or create new if none exist",
+      "Create Makefile with build, test, clean, vet targets",
+      "Verify: go build -o mhist . && ./mhist --help || true",
+      "Verify: make build succeeds"
+    ],
+    "passes": false
+  },
+  {
+    "id": 2,
+    "category": "foundation",
+    "description": "Scrollback buffer with ring buffer implementation and tests",
+    "steps": [
+      "Create buffer.go with ScrollbackBuffer struct: lines [][]byte, head, count, cap int",
+      "Implement NewScrollbackBuffer(capacity int)",
+      "Implement Write(data []byte) that processes raw PTY output and splits into lines, handling partial lines and \\n",
+      "Implement Lines() int, GetLine(index int) []byte, GetRange(start, count int) [][]byte",
+      "GetLine(0) returns oldest line, GetLine(Lines()-1) returns newest",
+      "Create buffer_test.go with tests: empty buffer, write single line, write multiple lines, ring buffer wraparound, partial lines, GetRange bounds",
+      "Verify: go test -run TestBuffer -v -count=1"
+    ],
+    "passes": false
+  },
+  {
+    "id": 3,
+    "category": "foundation",
+    "description": "Wire protocol encode/decode with message types and tests",
+    "steps": [
+      "Create protocol.go with message type constants: MsgData=0x01, MsgResize=0x02, MsgDetach=0x03, MsgKill=0x04, MsgHistoryRequest=0x05, MsgHistoryResponse=0x06",
+      "Define Message struct with Type byte and Payload []byte",
+      "Implement Encode(msg Message) []byte: [type:1][length:4 BE][payload:N]",
+      "Implement Decode(reader io.Reader) (Message, error): read type, read length, read payload",
+      "Create protocol_test.go with round-trip tests for each message type, empty payload, large payload, partial read error handling",
+      "Verify: go test -run TestProtocol -v -count=1"
+    ],
+    "passes": false
+  },
+  {
+    "id": 4,
+    "category": "foundation",
+    "description": "Terminal helpers: raw mode, mouse mode, screen operations",
+    "steps": [
+      "Create terminal.go with functions: enableRawMode(fd int) (*term.State, error), restoreTerminal(fd int, state *term.State)",
+      "Implement enableMouseMode(w io.Writer) writing ESC[?1006h (SGR mouse mode)",
+      "Implement disableMouseMode(w io.Writer) writing ESC[?1006l",
+      "Implement clearScreen(w io.Writer) writing ESC[2J ESC[H",
+      "Implement getTerminalSize(fd int) (rows, cols int, err error) using term or syscall",
+      "Implement moveCursor(w io.Writer, row, col int) writing ESC[row;colH",
+      "Verify: go build ./... (compiles without error)",
+      "Verify: go vet ./..."
+    ],
+    "passes": false
+  },
+  {
+    "id": 5,
+    "category": "foundation",
+    "description": "SGR mouse event parsing with tests",
+    "steps": [
+      "Create mouse.go with MouseEvent struct: Button, Col, Row int, Press bool",
+      "Implement ParseSGRMouse(data []byte) (MouseEvent, int, bool): parse ESC[<button;col;rowM or ESC[<button;col;rowm",
+      "Button 64 = scroll up, 65 = scroll down, 0 = left click, 1 = middle, 2 = right",
+      "Press=true for M terminator, Press=false for m terminator",
+      "Return bytes consumed so caller knows how much input was handled",
+      "Create mouse_test.go testing: scroll up, scroll down, left click, release events, incomplete sequences, invalid input",
+      "Verify: go test -run TestMouse -v -count=1"
+    ],
+    "passes": false
+  },
+  {
+    "id": 6,
+    "category": "core",
+    "description": "Session process: PTY management, scrollback buffer, Unix socket listener",
+    "steps": [
+      "Create session.go with Session struct holding: id, name, pty, buffer, listener, conn, socketPath, infoPath",
+      "Implement NewSession(id, name, shell string) that allocates PTY, execs shell, creates ScrollbackBuffer(10000)",
+      "Session listens on Unix socket at socketDir()/<id>.sock",
+      "Accept one client at a time (reject additional with error)",
+      "Read PTY output: feed to buffer.Write() and forward to connected client as MsgData",
+      "Handle incoming messages: MsgData→write to PTY, MsgResize→resize PTY, MsgDetach→close client conn, MsgKill→cleanup and exit",
+      "Write <id>.json info file with: id, name, pid, created timestamp, socket path",
+      "On shell exit (PTY EOF): clean up socket, info file, exit process",
+      "Implement socketDir() using XDG_RUNTIME_DIR with /tmp/mhist-UID fallback",
+      "Verify: go build ./... compiles without error",
+      "Verify: go vet ./..."
+    ],
+    "passes": false
+  },
+  {
+    "id": 7,
+    "category": "core",
+    "description": "Client: connect to session, raw mode, I/O relay, prefix key handling",
+    "steps": [
+      "Create client.go with Client struct holding: conn, terminal state, session id",
+      "Implement Connect(socketPath string) that connects to Unix socket",
+      "On connect: put terminal in raw mode, enable SGR mouse mode",
+      "Stdin relay goroutine: read stdin, handle Ctrl+a prefix (d=detach, Ctrl+a=send literal), send MsgData",
+      "Socket relay goroutine: read messages from socket, write MsgData payload to stdout",
+      "On detach: send MsgDetach, restore terminal, disable mouse mode, exit cleanly",
+      "On connection close: restore terminal, exit",
+      "Send initial MsgResize with current terminal dimensions",
+      "Verify: go build ./... compiles without error",
+      "Verify: go vet ./..."
+    ],
+    "passes": false
+  },
+  {
+    "id": 8,
+    "category": "core",
+    "description": "Wire up 'new' and 'attach' commands in main.go with background session launch",
+    "steps": [
+      "Implement 'mhist new [-n name]': generate UUID, start background session process (os/exec with --session-id flag), wait briefly for socket, then connect as client",
+      "Implement 'mhist attach [name|id]': find session by name or id prefix, connect as client",
+      "Implement default behavior (no args): find most recent session and attach, or create new if none",
+      "Session process launched via: os.Args[0] --session-id=X --name=Y (re-exec self)",
+      "Background process: set Setsid for process independence, redirect stdout/stderr to log",
+      "Verify: go build -o mhist . && ./mhist new -n test (should start session, show shell, Ctrl+a d detaches)",
+      "Verify: ./mhist ls shows the session",
+      "Verify: ./mhist attach test reattaches"
+    ],
+    "passes": false
+  },
+  {
+    "id": 9,
+    "category": "core",
+    "description": "List and kill commands: scan info files, display sessions, kill sessions",
+    "steps": [
+      "Implement 'mhist ls': scan socketDir()/*.json, read each info file, check PID alive with os.FindProcess + signal 0",
+      "Display table: ID (first 8 chars), NAME, CREATED, STATUS (alive/dead)",
+      "Clean up stale info files and sockets where PID is dead",
+      "Implement 'mhist kill [name|id]': find session, connect to socket, send MsgKill, or fallback to os.Kill",
+      "Verify: start a session, run ./mhist ls, kill it with ./mhist kill <id>, confirm ls shows nothing"
+    ],
+    "passes": false
+  },
+  {
+    "id": 10,
+    "category": "feature",
+    "description": "Detach and reattach: Ctrl+a d detaches, reattach redraws screen",
+    "steps": [
+      "Ctrl+a d in client sends MsgDetach, session closes client connection but keeps running",
+      "Client restores terminal, disables mouse mode, prints 'detached from session <name>'",
+      "On reattach: client connects, session sends recent scrollback lines for screen redraw",
+      "Session tracks last N lines of output (where N = terminal rows) for redraw on reattach",
+      "Verify: start session, run some commands, Ctrl+a d, reattach with ./mhist attach, screen shows previous output"
+    ],
+    "passes": false
+  },
+  {
+    "id": 11,
+    "category": "feature",
+    "description": "History scrollback: mouse wheel scrolls through buffer, keypress returns to live",
+    "steps": [
+      "Client parses mouse input using ParseSGRMouse",
+      "Scroll up (button 64): enter history mode, send MsgHistoryRequest with offset",
+      "Session handles MsgHistoryRequest: respond with MsgHistoryResponse containing requested lines from buffer",
+      "Client renders history lines on screen, replacing live output",
+      "Scroll down (button 65): scroll forward in history, or return to live if at end",
+      "Any non-mouse keypress while in history mode: exit history mode, return to live output, forward the keypress",
+      "Verify: start session, generate output (e.g. seq 1 1000), scroll up with mouse wheel, see earlier output, press key to return to live"
+    ],
+    "passes": false
+  },
+  {
+    "id": 12,
+    "category": "feature",
+    "description": "Window resize handling and scroll position indicator",
+    "steps": [
+      "Client catches SIGWINCH signal, reads new terminal size, sends MsgResize to session",
+      "Session receives MsgResize, resizes PTY with pty.Setsize",
+      "In history mode: display scroll position indicator at top-right corner, e.g. [line 123/10000]",
+      "Indicator uses save/restore cursor position to avoid disrupting display",
+      "Verify: start session, resize terminal window, confirm shell adapts to new size",
+      "Verify: scroll up in history, confirm position indicator appears"
+    ],
+    "passes": false
+  },
+  {
+    "id": 13,
+    "category": "reliability",
+    "description": "Session cleanup: shell exit detection, socket/info file cleanup, client notification",
+    "steps": [
+      "Session detects shell exit via PTY EOF (Read returns error)",
+      "On shell exit: close client connection (if any), remove Unix socket file, remove info JSON file",
+      "Session process exits cleanly after cleanup",
+      "Client handles unexpected connection close: restore terminal, print 'session ended', exit",
+      "Handle cleanup on SIGTERM/SIGINT to session process: kill shell, clean up files",
+      "Verify: start session, type 'exit' in shell, confirm session process exits and files are cleaned up",
+      "Verify: ls shows no stale sessions after shell exit"
+    ],
+    "passes": false
+  },
+  {
+    "id": 14,
+    "category": "testing",
+    "description": "Integration test script: create, ls, detach, reattach, kill lifecycle",
+    "steps": [
+      "Create test_integration.sh bash script",
+      "Test 1: ./mhist new -n testint creates a session (background, detach immediately via echo)",
+      "Test 2: ./mhist ls shows 'testint' in output",
+      "Test 3: ./mhist attach testint connects (send Ctrl+a d to detach)",
+      "Test 4: ./mhist kill testint succeeds",
+      "Test 5: ./mhist ls shows no sessions",
+      "Each test prints PASS/FAIL with description",
+      "Script exits 0 if all pass, 1 if any fail",
+      "Verify: make build && bash test_integration.sh passes all tests"
+    ],
+    "passes": false
+  },
+  {
+    "id": 15,
+    "category": "verification",
+    "description": "Final verification: build, all unit tests, vet, and integration tests pass",
+    "steps": [
+      "Run: make build (produces ./mhist binary)",
+      "Run: make test (all unit tests pass)",
+      "Run: make vet (no issues)",
+      "Run: bash test_integration.sh (all integration tests pass)",
+      "Verify binary runs: ./mhist ls (exits 0, shows header even with no sessions)",
+      "Write ALL_TASKS_COMPLETE to progress.md"
+    ],
+    "passes": false
+  }
+]
