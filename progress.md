@@ -26,3 +26,9 @@
 - Uses `golang.org/x/term` for raw mode and terminal size
 - SGR mouse mode 1006 escape sequences
 - Compiles and passes `go vet`
+
+### Iteration 5 — Task 5: SGR Mouse Parsing
+- Created `mouse.go` with `MouseEvent` struct and `ParseSGRMouse` function
+- Parses `ESC [ < button ; col ; row M/m` format, returns bytes consumed
+- Created `mouse_test.go` with 11 tests: scroll up/down, left/middle/right click, release, incomplete, too short, invalid, trailing data, bad params
+- All tests pass (31 total across all test files)
