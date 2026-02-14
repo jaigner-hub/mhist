@@ -45,6 +45,16 @@
 - Wired `runSession` in `main.go` to use `NewSession` + `Run`
 - Compiles and passes `go vet`
 
+### Iteration 8 — Task 8: Wire Up new/attach Commands
+- Implemented `cmdNew`: generates random UUID, launches background session process via re-exec with `--session-id`, waits for socket, connects as client
+- Implemented `cmdAttach`: finds session by name or ID prefix, connects as client
+- Implemented `cmdDefault`: attaches to most recent session or creates new if none
+- Implemented `launchSessionProcess`: sets Setsid for independence, redirects to log file, waits for socket
+- Implemented `listSessions`: scans info files, checks PID alive, cleans up stale files
+- Implemented `findSession`: matches by name or ID prefix
+- Used `crypto/rand` for UUID generation (no external dependency)
+- `./mhist ls` works, `make build` succeeds, all tests pass
+
 ### Iteration 7 — Task 7: Client
 - Created `client.go` with `Client` struct: Unix socket connect, raw mode, I/O relay
 - `relayStdin`: prefix key handling (Ctrl+a d=detach, Ctrl+a Ctrl+a=literal), mouse sequence forwarding

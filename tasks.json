@@ -125,7 +125,7 @@
       "Verify: ./mhist ls shows the session",
       "Verify: ./mhist attach test reattaches"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 9,
