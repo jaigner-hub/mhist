@@ -3,9 +3,12 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"golang.org/x/term"
 )
@@ -70,6 +73,9 @@ func (c *Client) Run() error {
 	// Send initial resize
 	c.sendResize()
 
+	// Handle SIGWINCH for terminal resize
+	go c.handleSigwinch()
+
 	// Start I/O relay goroutines
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -90,6 +96,28 @@ func (c *Client) Run() error {
 
 	c.restore()
 	return nil
+}
+
+// handleSigwinch handles terminal resize signals.
+func (c *Client) handleSigwinch() {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGWINCH)
+
+	for {
+		select {
+		case <-sigCh:
+			fd := int(os.Stdout.Fd())
+			rows, cols, err := getTerminalSize(fd)
+			if err == nil {
+				c.termRows = rows
+				c.termCols = cols
+				c.sendResize()
+			}
+		case <-c.done:
+			signal.Stop(sigCh)
+			return
+		}
+	}
 }
 
 // relayStdin reads from stdin and sends to the session, handling prefix key and history.
@@ -195,14 +223,8 @@ func (c *Client) requestHistory() {
 		rows = 24
 	}
 
-	// We want to request lines ending at (total - historyOffset)
-	// The session will figure out the actual range from offset+count
-	// We encode: offset from start = we don't know total, so we use a special
-	// encoding where we send negative offset meaning "from end"
-	// Actually, let's send the offset and count and let the session handle it
 	payload := make([]byte, 8)
-	// Use a sentinel: high bit set means "from end"
-	// offset = historyOffset (from end), count = rows
+	// High bit set means "from end"
 	binary.BigEndian.PutUint32(payload[0:4], uint32(0x80000000|uint32(c.historyOffset)))
 	binary.BigEndian.PutUint32(payload[4:8], uint32(rows))
 
@@ -215,7 +237,7 @@ func (c *Client) exitHistoryMode() {
 	c.historyMode = false
 	c.historyOffset = 0
 
-	// Request a "redraw" — offset 0x80000000 (from end, 0 offset = latest)
+	// Request redraw of latest lines
 	rows := c.termRows
 	if rows <= 0 {
 		rows = 24
@@ -246,10 +268,38 @@ func (c *Client) relaySocket() {
 			// In history mode, suppress live output
 
 		case MsgHistoryResponse:
-			// Render history on screen
-			clearScreen(os.Stdout)
-			os.Stdout.Write(msg.Payload)
+			c.renderHistory(msg.Payload)
 		}
+	}
+}
+
+// renderHistory renders history lines and optional position indicator.
+func (c *Client) renderHistory(payload []byte) {
+	if len(payload) < 8 {
+		return
+	}
+
+	startLine := int(binary.BigEndian.Uint32(payload[0:4]))
+	totalLines := int(binary.BigEndian.Uint32(payload[4:8]))
+	lineData := payload[8:]
+
+	clearScreen(os.Stdout)
+	os.Stdout.Write(lineData)
+
+	// Show scroll position indicator at top-right if in history mode
+	if c.historyMode && totalLines > 0 {
+		indicator := fmt.Sprintf("[line %d/%d]", startLine+1, totalLines)
+		col := c.termCols - len(indicator) + 1
+		if col < 1 {
+			col = 1
+		}
+		// Save cursor, move to top-right, print indicator, restore cursor
+		io.WriteString(os.Stdout, "\x1b7")           // save cursor
+		moveCursor(os.Stdout, 1, col)                 // move to top-right
+		io.WriteString(os.Stdout, "\x1b[7m")          // reverse video
+		io.WriteString(os.Stdout, indicator)           // print indicator
+		io.WriteString(os.Stdout, "\x1b[27m")         // reset reverse
+		io.WriteString(os.Stdout, "\x1b8")            // restore cursor
 	}
 }
 

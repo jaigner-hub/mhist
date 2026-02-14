@@ -180,7 +180,7 @@
       "Verify: start session, resize terminal window, confirm shell adapts to new size",
       "Verify: scroll up in history, confirm position indicator appears"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 13,

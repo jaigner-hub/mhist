@@ -79,6 +79,14 @@
 - Scrolls 3 lines per wheel event
 - Compiles, passes vet and all tests
 
+### Iteration 12 — Task 12: Window Resize and Scroll Indicator
+- Added SIGWINCH handler to client: catches signal, reads new terminal size, sends MsgResize
+- Session already handles MsgResize → PTY resize (from task 6)
+- Added scroll position indicator: `[line N/total]` at top-right corner in reverse video
+- Indicator uses save/restore cursor to avoid disrupting display
+- History response now includes 8-byte header (startLine + totalLines) for position tracking
+- Compiles, passes vet and all tests
+
 ### Iteration 7 — Task 7: Client
 - Created `client.go` with `Client` struct: Unix socket connect, raw mode, I/O relay
 - `relayStdin`: prefix key handling (Ctrl+a d=detach, Ctrl+a Ctrl+a=literal), mouse sequence forwarding

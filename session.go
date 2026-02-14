@@ -284,6 +284,7 @@ func (s *Session) sendRedraw(conn net.Conn) {
 	}
 }
 
+
 // handleHistoryRequest responds to a client's history request.
 func (s *Session) handleHistoryRequest(conn net.Conn, payload []byte) {
 	if len(payload) < 8 {
@@ -307,7 +308,14 @@ func (s *Session) handleHistoryRequest(conn net.Conn, payload []byte) {
 	}
 
 	lines := s.buffer.GetRange(start, count)
+
+	// Build response: [startLine:4 BE][totalLines:4 BE][line data]
 	var result []byte
+	header := make([]byte, 8)
+	binary.BigEndian.PutUint32(header[0:4], uint32(start))
+	binary.BigEndian.PutUint32(header[4:8], uint32(totalLines))
+	result = append(result, header...)
+
 	for i, line := range lines {
 		result = append(result, line...)
 		if i < len(lines)-1 {
