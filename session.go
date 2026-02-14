@@ -28,6 +28,7 @@ type Session struct {
 	infoPath   string
 	client     net.Conn
 	clientMu   sync.Mutex
+	lastRows   int // last known terminal rows for redraw
 }
 
 // SessionInfo is the JSON metadata written to the info file.
@@ -191,6 +192,10 @@ func (s *Session) acceptClients() {
 		s.clientMu.Unlock()
 
 		log.Printf("session %s: client connected", s.id)
+
+		// Send recent scrollback lines for screen redraw
+		s.sendRedraw(conn)
+
 		go s.handleClient(conn)
 	}
 }
@@ -221,6 +226,7 @@ func (s *Session) handleClient(conn net.Conn) {
 			if len(msg.Payload) >= 4 {
 				rows := int(msg.Payload[0])<<8 | int(msg.Payload[1])
 				cols := int(msg.Payload[2])<<8 | int(msg.Payload[3])
+				s.lastRows = rows
 				pty.Setsize(s.ptmx, &pty.Winsize{
 					Rows: uint16(rows),
 					Cols: uint16(cols),
@@ -239,6 +245,41 @@ func (s *Session) handleClient(conn net.Conn) {
 		case MsgHistoryRequest:
 			s.handleHistoryRequest(conn, msg.Payload)
 		}
+	}
+}
+
+// sendRedraw sends recent scrollback lines to the client for screen redraw.
+func (s *Session) sendRedraw(conn net.Conn) {
+	rows := s.lastRows
+	if rows <= 0 {
+		rows = 24 // default
+	}
+
+	totalLines := s.buffer.Lines()
+	if totalLines == 0 {
+		return
+	}
+
+	start := totalLines - rows
+	if start < 0 {
+		start = 0
+	}
+	count := totalLines - start
+
+	lines := s.buffer.GetRange(start, count)
+	var redraw []byte
+	// Clear screen first
+	redraw = append(redraw, []byte("\x1b[2J\x1b[H")...)
+	for i, line := range lines {
+		redraw = append(redraw, line...)
+		if i < len(lines)-1 {
+			redraw = append(redraw, '\r', '\n')
+		}
+	}
+
+	if len(redraw) > 0 {
+		encoded := Encode(Message{Type: MsgData, Payload: redraw})
+		conn.Write(encoded)
 	}
 }
 

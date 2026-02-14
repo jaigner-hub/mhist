@@ -151,7 +151,7 @@
       "Session tracks last N lines of output (where N = terminal rows) for redraw on reattach",
       "Verify: start session, run some commands, Ctrl+a d, reattach with ./mhist attach, screen shows previous output"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 11,

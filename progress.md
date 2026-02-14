@@ -62,6 +62,13 @@
 - `listSessions` cleans stale files automatically
 - Verified: `./mhist ls` displays header, all tests pass
 
+### Iteration 10 — Task 10: Detach and Reattach
+- Ctrl+a d detach was already implemented in client (task 7)
+- Added `sendRedraw` to session: on client connect, sends last N lines (where N = terminal rows) from scrollback buffer
+- Session tracks `lastRows` from MsgResize for redraw sizing (defaults to 24)
+- Redraw clears screen and renders recent lines
+- Compiles, passes vet and all tests
+
 ### Iteration 7 — Task 7: Client
 - Created `client.go` with `Client` struct: Unix socket connect, raw mode, I/O relay
 - `relayStdin`: prefix key handling (Ctrl+a d=detach, Ctrl+a Ctrl+a=literal), mouse sequence forwarding
