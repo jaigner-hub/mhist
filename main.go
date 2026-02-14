@@ -119,7 +119,7 @@ func cmdNew(name string) {
 		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stderr, "detached from session %s\n", name)
+	printExitMessage(client, name)
 }
 
 func cmdAttach(target string) {
@@ -141,7 +141,7 @@ func cmdAttach(target string) {
 		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stderr, "detached from session %s\n", info.Name)
+	printExitMessage(client, info.Name)
 }
 
 func cmdDefault() {
@@ -160,7 +160,7 @@ func cmdDefault() {
 			os.Exit(1)
 		}
 
-		fmt.Fprintf(os.Stderr, "detached from session %s\n", info.Name)
+		printExitMessage(client, info.Name)
 		return
 	}
 
@@ -213,6 +213,15 @@ func cmdKill(target string) {
 	os.Remove(info.Socket)
 	infoPath := filepath.Join(socketDir(), info.ID+".json")
 	os.Remove(infoPath)
+}
+
+// printExitMessage prints the appropriate message after a client exits.
+func printExitMessage(client *Client, name string) {
+	if client.detached {
+		fmt.Fprintf(os.Stderr, "detached from session %s\n", name)
+	} else {
+		fmt.Fprintf(os.Stderr, "session ended\n")
+	}
 }
 
 // launchSessionProcess starts a background session process and waits for the socket.
