@@ -12,7 +12,7 @@
       "Verify: go build -o mhist . && ./mhist --help || true",
       "Verify: make build succeeds"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 2,
