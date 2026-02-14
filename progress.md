@@ -44,3 +44,11 @@
 - Cleanup removes socket and info files
 - Wired `runSession` in `main.go` to use `NewSession` + `Run`
 - Compiles and passes `go vet`
+
+### Iteration 7 — Task 7: Client
+- Created `client.go` with `Client` struct: Unix socket connect, raw mode, I/O relay
+- `relayStdin`: prefix key handling (Ctrl+a d=detach, Ctrl+a Ctrl+a=literal), mouse sequence forwarding
+- `relaySocket`: decode messages, write MsgData to stdout
+- Sends initial MsgResize with terminal dimensions on connect
+- Clean restore: disable mouse mode, restore terminal state, close connection
+- Compiles and passes `go vet`
