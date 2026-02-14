@@ -14,3 +14,9 @@
 - Handles partial lines (no trailing `\n`) by buffering until next write
 - Created `buffer_test.go` with 9 tests: empty, single line, multi-line, wraparound, partial lines, GetRange bounds, out-of-range, large wraparound
 - All tests pass
+
+### Iteration 3 — Task 3: Wire Protocol
+- Created `protocol.go` with `Message` struct, `Encode`/`Decode` functions, 6 message type constants
+- Wire format: `[type:1][length:4 BE][payload:N]`
+- Created `protocol_test.go` with 11 tests: round-trip for all message types, empty payload, large payload, partial read error, truncated payload, multiple messages
+- All tests pass

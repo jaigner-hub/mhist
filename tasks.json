@@ -41,7 +41,7 @@
       "Create protocol_test.go with round-trip tests for each message type, empty payload, large payload, partial read error handling",
       "Verify: go test -run TestProtocol -v -count=1"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 4,
