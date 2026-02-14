@@ -27,7 +27,7 @@
       "Create buffer_test.go with tests: empty buffer, write single line, write multiple lines, ring buffer wraparound, partial lines, GetRange bounds",
       "Verify: go test -run TestBuffer -v -count=1"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 3,
