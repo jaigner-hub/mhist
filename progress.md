@@ -109,7 +109,12 @@
 - `./mhist ls` — exits 0, shows header with no sessions
 - All 15 tasks pass
 
-ALL_TASKS_COMPLETE
+--- Tasks 1-15 complete. Starting fix cycle for reattach display + scrollback history (tasks 16-19). ---
+
+### Iteration 16 — Task 16: GetPartial() method for ScrollbackBuffer
+- Added `GetPartial()` method to `buffer.go`: returns a copy of the current partial line, or nil if empty
+- Added 3 tests to `buffer_test.go`: `TestBufferGetPartial` (partial data present), `TestBufferGetPartialEmpty` (fresh buffer), `TestBufferGetPartialAfterNewline` (after complete line)
+- All 34 tests pass (12 buffer, 11 mouse, 11 protocol), `go vet` clean
 
 ### Iteration 7 — Task 7: Client
 - Created `client.go` with `Client` struct: Unix socket connect, raw mode, I/O relay

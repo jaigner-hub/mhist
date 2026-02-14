@@ -227,5 +227,62 @@
       "Write ALL_TASKS_COMPLETE to progress.md"
     ],
     "passes": true
+  },
+  {
+    "id": 16,
+    "category": "fix",
+    "description": "Add GetPartial() method to ScrollbackBuffer to expose the current partial line",
+    "steps": [
+      "In buffer.go, add method: func (b *ScrollbackBuffer) GetPartial() []byte — returns a copy of b.partial (return nil if partial is empty)",
+      "In buffer_test.go, add TestBufferGetPartial: write partial data without trailing newline, verify GetPartial() returns the partial content",
+      "In buffer_test.go, add TestBufferGetPartialEmpty: verify GetPartial() returns nil on a fresh buffer",
+      "In buffer_test.go, add TestBufferGetPartialAfterNewline: write 'hello\\n', verify GetPartial() returns nil (partial is consumed)",
+      "Verify: go test -run TestBuffer -v -count=1 (all buffer tests pass)",
+      "Verify: go vet ./..."
+    ],
+    "passes": true
+  },
+  {
+    "id": 17,
+    "category": "fix",
+    "description": "Add 64KB raw PTY replay buffer to Session and rewrite sendRedraw to replay raw output",
+    "steps": [
+      "In Session struct (session.go), add three fields: rawBuf []byte (allocated as make([]byte, 65536)), rawHead int, rawLen int — these form a circular buffer for raw PTY output",
+      "In NewSession, initialize rawBuf: s.rawBuf = make([]byte, 65536) (rawHead and rawLen default to 0)",
+      "In readPTY, after the existing s.buffer.Write(data) call, add code to append the raw data into rawBuf as a circular buffer: for each byte in data, write to rawBuf[rawHead], increment rawHead mod len(rawBuf), increment rawLen up to len(rawBuf)",
+      "Rewrite sendRedraw to: (1) build a []byte from rawBuf by reading rawLen bytes starting from (rawHead - rawLen) mod cap, (2) prepend the clear-screen escape sequence \\x1b[2J\\x1b[H, (3) send the combined payload as a single MsgData message to the client",
+      "The old sendRedraw logic using buffer.GetRange should be completely replaced — do NOT reconstruct from parsed lines",
+      "Verify: go build ./... (compiles without error)",
+      "Verify: go vet ./..."
+    ],
+    "passes": false
+  },
+  {
+    "id": 18,
+    "category": "fix",
+    "description": "Fix handleHistoryRequest to include the partial line (current prompt) in history responses",
+    "steps": [
+      "In handleHistoryRequest (session.go), after building the lines from s.buffer.GetRange(), check if the request includes the most recent lines (i.e. start + len(lines) >= totalLines)",
+      "If it does include the end, call s.buffer.GetPartial() and if non-nil, append it as the last entry in the response data (after a \\r\\n separator)",
+      "This ensures the current shell prompt (which hasn't received a newline yet) appears in history and redraw responses",
+      "Verify: go build ./... (compiles without error)",
+      "Verify: go vet ./...",
+      "Verify: go test ./... -v -count=1 (all tests pass)"
+    ],
+    "passes": false
+  },
+  {
+    "id": 19,
+    "category": "verification",
+    "description": "Final verification: build, all tests, vet pass after reattach fixes",
+    "steps": [
+      "Run: make build (produces ./mhist binary)",
+      "Run: make test (all unit tests pass including new GetPartial tests)",
+      "Run: make vet (no issues)",
+      "Run: bash test_integration.sh (all integration tests still pass)",
+      "Verify binary runs: ./mhist ls (exits 0)",
+      "Write ALL_TASKS_COMPLETE to progress.md"
+    ],
+    "passes": false
   }
 ]

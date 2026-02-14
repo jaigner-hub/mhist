@@ -143,6 +143,30 @@ func TestBufferGetLineOutOfRange(t *testing.T) {
 	}
 }
 
+func TestBufferGetPartial(t *testing.T) {
+	b := NewScrollbackBuffer(100)
+	b.Write([]byte("hello"))
+	p := b.GetPartial()
+	if !bytes.Equal(p, []byte("hello")) {
+		t.Errorf("expected 'hello', got %q", p)
+	}
+}
+
+func TestBufferGetPartialEmpty(t *testing.T) {
+	b := NewScrollbackBuffer(100)
+	if p := b.GetPartial(); p != nil {
+		t.Errorf("expected nil on fresh buffer, got %q", p)
+	}
+}
+
+func TestBufferGetPartialAfterNewline(t *testing.T) {
+	b := NewScrollbackBuffer(100)
+	b.Write([]byte("hello\n"))
+	if p := b.GetPartial(); p != nil {
+		t.Errorf("expected nil after complete line, got %q", p)
+	}
+}
+
 func TestBufferLargeWraparound(t *testing.T) {
 	b := NewScrollbackBuffer(5)
 	for i := 0; i < 20; i++ {

@@ -70,6 +70,17 @@ func (b *ScrollbackBuffer) GetLine(index int) []byte {
 	return b.lines[actual]
 }
 
+// GetPartial returns a copy of the current partial line (data written without
+// a trailing newline). Returns nil if there is no partial line.
+func (b *ScrollbackBuffer) GetPartial() []byte {
+	if len(b.partial) == 0 {
+		return nil
+	}
+	out := make([]byte, len(b.partial))
+	copy(out, b.partial)
+	return out
+}
+
 // GetRange returns count lines starting from start index.
 // Clamps to available range.
 func (b *ScrollbackBuffer) GetRange(start, count int) [][]byte {
