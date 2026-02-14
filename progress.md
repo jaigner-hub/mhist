@@ -101,6 +101,16 @@
 - Script launches session process directly, tests lifecycle without interactive I/O
 - All 6 integration tests pass, all 31 unit tests pass
 
+### Iteration 15 — Task 15: Final Verification
+- `make build` — produces `./mhist` binary (3.8MB)
+- `make test` — all 31 unit tests pass (buffer: 9, mouse: 11, protocol: 11)
+- `make vet` — no issues
+- `bash test_integration.sh` — all 6 integration tests pass
+- `./mhist ls` — exits 0, shows header with no sessions
+- All 15 tasks pass
+
+ALL_TASKS_COMPLETE
+
 ### Iteration 7 — Task 7: Client
 - Created `client.go` with `Client` struct: Unix socket connect, raw mode, I/O relay
 - `relayStdin`: prefix key handling (Ctrl+a d=detach, Ctrl+a Ctrl+a=literal), mouse sequence forwarding
