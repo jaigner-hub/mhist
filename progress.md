@@ -20,3 +20,9 @@
 - Wire format: `[type:1][length:4 BE][payload:N]`
 - Created `protocol_test.go` with 11 tests: round-trip for all message types, empty payload, large payload, partial read error, truncated payload, multiple messages
 - All tests pass
+
+### Iteration 4 — Task 4: Terminal Helpers
+- Created `terminal.go` with: `enableRawMode`, `restoreTerminal`, `enableMouseMode`, `disableMouseMode`, `clearScreen`, `moveCursor`, `getTerminalSize`
+- Uses `golang.org/x/term` for raw mode and terminal size
+- SGR mouse mode 1006 escape sequences
+- Compiles and passes `go vet`
