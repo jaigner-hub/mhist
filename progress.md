@@ -111,6 +111,16 @@
 
 --- Tasks 1-15 complete. Starting fix cycle for reattach display + scrollback history (tasks 16-19). ---
 
+### Iteration 19 — Task 19: Final Verification (post-reattach fixes)
+- `make build` — produces `./mhist` binary
+- `make test` — all 34 unit tests pass (12 buffer, 11 mouse, 11 protocol)
+- `make vet` — no issues
+- `bash test_integration.sh` — all 6 integration tests pass
+- `./mhist ls` — exits 0, shows header with no sessions
+- All 19 tasks pass
+
+ALL_TASKS_COMPLETE
+
 ### Iteration 18 — Task 18: Include partial line in history responses
 - In `handleHistoryRequest`, after building lines from `GetRange()`, checks if response includes the most recent lines
 - If so, calls `buffer.GetPartial()` and appends the partial line (current prompt) to the response data

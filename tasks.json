@@ -283,6 +283,6 @@
       "Verify binary runs: ./mhist ls (exits 0)",
       "Write ALL_TASKS_COMPLETE to progress.md"
     ],
-    "passes": false
+    "passes": true
   }
 ]
