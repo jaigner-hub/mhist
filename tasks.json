@@ -212,7 +212,7 @@
       "Script exits 0 if all pass, 1 if any fail",
       "Verify: make build && bash test_integration.sh passes all tests"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 15,

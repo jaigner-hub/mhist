@@ -36,8 +36,8 @@ func main() {
 
 	// Internal flag: --session-id=X runs as a session process
 	for _, arg := range args {
-		if len(arg) > 14 && arg[:14] == "--session-id=" {
-			sessionID := arg[14:]
+		if len(arg) > 13 && arg[:13] == "--session-id=" {
+			sessionID := arg[13:]
 			name := ""
 			for _, a := range args {
 				if len(a) > 7 && a[:7] == "--name=" {

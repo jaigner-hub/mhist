@@ -95,6 +95,12 @@
 - Client now prints "session ended" on unexpected connection close (shell exit)
 - Compiles, passes vet and all 31 tests
 
+### Iteration 14 — Task 14: Integration Test Script
+- Created `test_integration.sh` with 6 tests: create session, ls shows it, socket exists, kill session, process exits, ls shows nothing
+- Fixed `--session-id=` flag parsing: prefix is 13 chars, not 14 (off-by-one bug)
+- Script launches session process directly, tests lifecycle without interactive I/O
+- All 6 integration tests pass, all 31 unit tests pass
+
 ### Iteration 7 — Task 7: Client
 - Created `client.go` with `Client` struct: Unix socket connect, raw mode, I/O relay
 - `relayStdin`: prefix key handling (Ctrl+a d=detach, Ctrl+a Ctrl+a=literal), mouse sequence forwarding
