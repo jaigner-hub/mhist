@@ -30,6 +30,9 @@ type Session struct {
 	client     net.Conn
 	clientMu   sync.Mutex
 	lastRows   int // last known terminal rows for redraw
+	rawBuf     []byte // 64KB circular buffer for raw PTY replay
+	rawHead    int    // next write position in rawBuf
+	rawLen     int    // bytes currently stored in rawBuf
 }
 
 // SessionInfo is the JSON metadata written to the info file.
@@ -92,6 +95,7 @@ func NewSession(id, name, shell string) (*Session, error) {
 		listener:   listener,
 		socketPath: sockPath,
 		infoPath:   infoPath,
+		rawBuf:     make([]byte, 65536),
 	}
 
 	if err := s.writeInfoFile(); err != nil {
@@ -158,6 +162,16 @@ func (s *Session) readPTY(done chan<- struct{}) {
 			copy(data, buf[:n])
 
 			s.buffer.Write(data)
+
+			// Append to raw circular replay buffer
+			cap := len(s.rawBuf)
+			for _, b := range data {
+				s.rawBuf[s.rawHead] = b
+				s.rawHead = (s.rawHead + 1) % cap
+				if s.rawLen < cap {
+					s.rawLen++
+				}
+			}
 
 			s.clientMu.Lock()
 			if s.client != nil {
@@ -249,39 +263,27 @@ func (s *Session) handleClient(conn net.Conn) {
 	}
 }
 
-// sendRedraw sends recent scrollback lines to the client for screen redraw.
+// sendRedraw replays raw PTY output from the circular buffer to the client.
 func (s *Session) sendRedraw(conn net.Conn) {
-	rows := s.lastRows
-	if rows <= 0 {
-		rows = 24 // default
-	}
-
-	totalLines := s.buffer.Lines()
-	if totalLines == 0 {
+	if s.rawLen == 0 {
 		return
 	}
 
-	start := totalLines - rows
-	if start < 0 {
-		start = 0
+	// Extract rawLen bytes from the circular buffer
+	cap := len(s.rawBuf)
+	startPos := (s.rawHead - s.rawLen + cap) % cap
+	raw := make([]byte, s.rawLen)
+	for i := 0; i < s.rawLen; i++ {
+		raw[i] = s.rawBuf[(startPos+i)%cap]
 	}
-	count := totalLines - start
 
-	lines := s.buffer.GetRange(start, count)
+	// Prepend clear screen, then send raw replay
 	var redraw []byte
-	// Clear screen first
 	redraw = append(redraw, []byte("\x1b[2J\x1b[H")...)
-	for i, line := range lines {
-		redraw = append(redraw, line...)
-		if i < len(lines)-1 {
-			redraw = append(redraw, '\r', '\n')
-		}
-	}
+	redraw = append(redraw, raw...)
 
-	if len(redraw) > 0 {
-		encoded := Encode(Message{Type: MsgData, Payload: redraw})
-		conn.Write(encoded)
-	}
+	encoded := Encode(Message{Type: MsgData, Payload: redraw})
+	conn.Write(encoded)
 }
 
 

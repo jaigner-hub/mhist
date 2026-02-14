@@ -111,6 +111,13 @@
 
 --- Tasks 1-15 complete. Starting fix cycle for reattach display + scrollback history (tasks 16-19). ---
 
+### Iteration 17 — Task 17: Raw PTY replay buffer for sendRedraw
+- Added `rawBuf []byte` (64KB), `rawHead int`, `rawLen int` to Session struct for circular raw PTY buffer
+- Initialized `rawBuf = make([]byte, 65536)` in NewSession
+- In `readPTY`, after `buffer.Write(data)`, appends each byte to rawBuf circular buffer
+- Rewrote `sendRedraw` to extract raw bytes from circular buffer, prepend clear screen escape, and send as single MsgData — no longer reconstructs from parsed lines
+- Build, vet, and all 34 tests pass
+
 ### Iteration 16 — Task 16: GetPartial() method for ScrollbackBuffer
 - Added `GetPartial()` method to `buffer.go`: returns a copy of the current partial line, or nil if empty
 - Added 3 tests to `buffer_test.go`: `TestBufferGetPartial` (partial data present), `TestBufferGetPartialEmpty` (fresh buffer), `TestBufferGetPartialAfterNewline` (after complete line)
