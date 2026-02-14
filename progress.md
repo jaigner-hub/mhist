@@ -111,6 +111,12 @@
 
 --- Tasks 1-15 complete. Starting fix cycle for reattach display + scrollback history (tasks 16-19). ---
 
+### Iteration 18 — Task 18: Include partial line in history responses
+- In `handleHistoryRequest`, after building lines from `GetRange()`, checks if response includes the most recent lines
+- If so, calls `buffer.GetPartial()` and appends the partial line (current prompt) to the response data
+- This ensures the shell prompt appears in history scrollback and redraw responses
+- Build, vet, and all 34 tests pass
+
 ### Iteration 17 — Task 17: Raw PTY replay buffer for sendRedraw
 - Added `rawBuf []byte` (64KB), `rawHead int`, `rawLen int` to Session struct for circular raw PTY buffer
 - Initialized `rawBuf = make([]byte, 65536)` in NewSession

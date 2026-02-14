@@ -269,7 +269,7 @@
       "Verify: go vet ./...",
       "Verify: go test ./... -v -count=1 (all tests pass)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 19,

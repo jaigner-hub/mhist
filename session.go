@@ -325,6 +325,14 @@ func (s *Session) handleHistoryRequest(conn net.Conn, payload []byte) {
 		}
 	}
 
+	// If the response includes the most recent lines, append the partial line (current prompt)
+	if start+len(lines) >= totalLines {
+		if partial := s.buffer.GetPartial(); partial != nil {
+			result = append(result, '\r', '\n')
+			result = append(result, partial...)
+		}
+	}
+
 	resp := Encode(Message{Type: MsgHistoryResponse, Payload: result})
 	conn.Write(resp)
 }
