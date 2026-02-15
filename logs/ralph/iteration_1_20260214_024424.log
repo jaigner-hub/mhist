@@ -1,0 +1,20 @@
+All 15 tasks pass. The final verification confirms:
+
+- **`make build`** — produces `./mhist` binary
+- **`make test`** — all 31 unit tests pass (9 buffer, 11 mouse, 11 protocol)
+- **`make vet`** — no issues
+- **`bash test_integration.sh`** — all 6 integration tests pass
+- **`./mhist ls`** — exits 0, shows header with no sessions
+- **`ALL_TASKS_COMPLETE`** — already written to `progress.md`
+- **`tasks.json`** — all 15 tasks have `"passes": true`
+
+The project is complete. mhist is a fully functional terminal multiplexer for mosh scrollback with:
+- Session management (new, attach, ls, kill)
+- PTY management with Unix socket IPC
+- Binary wire protocol
+- 10,000-line scrollback ring buffer
+- Mouse wheel history scrolling
+- Prefix key (Ctrl+a) for detach
+- Window resize handling
+- Session cleanup on shell exit
+- Integration and unit test coverage

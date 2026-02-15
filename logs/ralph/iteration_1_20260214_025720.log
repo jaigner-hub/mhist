@@ -1,0 +1,9 @@
+All 4 tasks (16-19) are complete. Here's a summary of what was done this iteration:
+
+**Task 16** — Added `GetPartial()` method to `ScrollbackBuffer` that returns a copy of the current partial line (data written without a trailing newline). Added 3 tests.
+
+**Task 17** — Added a 64KB raw circular replay buffer (`rawBuf`, `rawHead`, `rawLen`) to the Session struct. Raw PTY bytes are captured in `readPTY`. Rewrote `sendRedraw` to replay raw output instead of reconstructing from parsed lines, enabling faithful terminal state reproduction on reattach.
+
+**Task 18** — Fixed `handleHistoryRequest` to append the partial line (current prompt) when the response covers the most recent buffer lines, so the shell prompt appears in history scrollback.
+
+**Task 19** — Final verification: `make build`, `make test` (34 tests), `make vet`, integration tests (6 tests), and `./mhist ls` all pass. `ALL_TASKS_COMPLETE` written to progress.md.

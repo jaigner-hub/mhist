@@ -9,11 +9,39 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"golang.org/x/term"
 )
 
 const scrollLines = 3 // lines to scroll per mouse wheel event
+
+// stdinData represents a chunk read from stdin.
+type stdinData struct {
+	buf []byte
+	err error
+}
+
+// stdinReader is a shared stdin reader that survives across client instances.
+// This prevents goroutine leaks and lost keystrokes when switching sessions.
+var stdinCh = startStdinReader()
+
+func startStdinReader() <-chan stdinData {
+	ch := make(chan stdinData, 1)
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := os.Stdin.Read(buf)
+			data := make([]byte, n)
+			copy(data, buf[:n])
+			ch <- stdinData{buf: data, err: err}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	return ch
+}
 
 // Client connects to a session's Unix socket and relays I/O.
 type Client struct {
@@ -32,6 +60,7 @@ type Client struct {
 
 	// Session switching
 	choosingSession bool
+	deletingSession bool // true when in delete-mode within session picker
 	sessionChoices  []SessionInfo
 	SwitchTarget    *SessionInfo
 
@@ -133,13 +162,20 @@ func (c *Client) handleSigwinch() {
 func (c *Client) relayStdin() {
 	defer c.signalDone()
 
-	buf := make([]byte, 4096)
 	prefixActive := false
 
 	for {
-		n, err := os.Stdin.Read(buf)
-		if err != nil {
+		var buf []byte
+		var n int
+		select {
+		case <-c.done:
 			return
+		case data := <-stdinCh:
+			if data.err != nil {
+				return
+			}
+			buf = data.buf
+			n = len(buf)
 		}
 
 		for i := 0; i < n; i++ {
@@ -452,49 +488,98 @@ func (c *Client) showSessionPicker() {
 	}
 
 	io.WriteString(os.Stdout, "\r\n  n) New session\r\n")
+	io.WriteString(os.Stdout, "  d) Delete session\r\n")
 	io.WriteString(os.Stdout, "  q) Cancel\r\n\r\n")
 	io.WriteString(os.Stdout, "Choice: ")
 }
 
 // handleSessionChoice processes a keypress while the session picker is shown.
 func (c *Client) handleSessionChoice(b byte) {
-	c.choosingSession = false
+	if c.deletingSession {
+		// In delete mode — handle the second keypress
+		c.deletingSession = false
 
-	if b == 'n' || b == 'N' {
-		// Switch to a brand new session
-		c.SwitchTarget = &SessionInfo{} // empty = create new
-		encoded := Encode(Message{Type: MsgDetach, Payload: nil})
-		c.conn.Write(encoded)
-		c.detached = true
-		c.signalDone()
-		return
-	}
-
-	if b == 'q' || b == 0x1b {
-		// Cancel — request redraw to restore screen
-		c.sendRedrawRequest()
-		return
-	}
-
-	// Number selection (1-9)
-	idx := int(b-'1')
-	if idx >= 0 && idx < len(c.sessionChoices) {
-		chosen := c.sessionChoices[idx]
-		if chosen.ID == c.sessionID {
-			// Already on this session — cancel
-			c.sendRedrawRequest()
+		if b == 'q' || b == 0x1b {
+			c.showSessionPicker()
 			return
 		}
-		c.SwitchTarget = &chosen
+
+		idx := int(b - '1')
+		if idx >= 0 && idx < len(c.sessionChoices) {
+			chosen := c.sessionChoices[idx]
+			if chosen.ID == c.sessionID {
+				// Can't delete current session — show error briefly then redisplay
+				clearScreen(os.Stdout)
+				io.WriteString(os.Stdout, "\x1b[31mCannot delete the active session.\x1b[0m\r\n")
+				time.Sleep(800 * time.Millisecond)
+				c.showSessionPicker()
+				return
+			}
+			killSession(chosen)
+			// Brief pause so the session has time to clean up
+			time.Sleep(200 * time.Millisecond)
+			c.showSessionPicker()
+			return
+		}
+
+		// Invalid key — back to picker
+		c.showSessionPicker()
+		return
+	}
+
+	// Normal picker mode
+	c.choosingSession = false
+
+	switch {
+	case b == 'n' || b == 'N':
+		c.SwitchTarget = &SessionInfo{}
 		encoded := Encode(Message{Type: MsgDetach, Payload: nil})
 		c.conn.Write(encoded)
 		c.detached = true
 		c.signalDone()
-		return
-	}
 
-	// Invalid key — cancel
-	c.sendRedrawRequest()
+	case b == 'd' || b == 'D':
+		c.choosingSession = true
+		c.deletingSession = true
+		clearScreen(os.Stdout)
+		io.WriteString(os.Stdout, "\x1b[1mDelete session:\x1b[0m\r\n\r\n")
+		for i, info := range c.sessionChoices {
+			shortID := info.ID
+			if len(shortID) > 8 {
+				shortID = shortID[:8]
+			}
+			marker := "  "
+			if info.ID == c.sessionID {
+				marker = "* "
+			}
+			io.WriteString(os.Stdout, fmt.Sprintf("  %s%d) %s [%s]\r\n", marker, i+1, info.Name, shortID))
+		}
+		io.WriteString(os.Stdout, "\r\n  q) Cancel\r\n\r\n")
+		io.WriteString(os.Stdout, "Delete (1-9): ")
+
+	case b == 'q' || b == 0x1b:
+		c.sendRedrawRequest()
+
+	case b >= '1' && b <= '9':
+		idx := int(b - '1')
+		if idx < len(c.sessionChoices) {
+			chosen := c.sessionChoices[idx]
+			if chosen.ID == c.sessionID {
+				c.sendRedrawRequest()
+				return
+			}
+			c.SwitchTarget = &chosen
+			encoded := Encode(Message{Type: MsgDetach, Payload: nil})
+			c.conn.Write(encoded)
+			c.detached = true
+			c.signalDone()
+		} else {
+			c.sendRedrawRequest()
+		}
+
+	default:
+		c.sendRedrawRequest()
+	}
 }
 
 // sendRedrawRequest asks the session to resend the current screen.

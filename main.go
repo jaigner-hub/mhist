@@ -187,13 +187,19 @@ func cmdKill(target string) {
 		os.Exit(1)
 	}
 
+	killSession(info)
+	fmt.Printf("killed session %s\n", info.Name)
+}
+
+// killSession kills a session by sending MsgKill via its socket, falling back
+// to a direct process kill, and cleaning up socket/info files.
+func killSession(info SessionInfo) {
 	// Try sending MsgKill via socket
 	conn, dialErr := net.Dial("unix", info.Socket)
 	if dialErr == nil {
 		encoded := Encode(Message{Type: MsgKill, Payload: nil})
 		conn.Write(encoded)
 		conn.Close()
-		fmt.Printf("killed session %s\n", info.Name)
 		return
 	}
 
@@ -201,7 +207,6 @@ func cmdKill(target string) {
 	proc, err := os.FindProcess(info.PID)
 	if err == nil {
 		proc.Kill()
-		fmt.Printf("killed session %s (via signal)\n", info.Name)
 	}
 
 	// Clean up stale files

@@ -1,0 +1,28 @@
+All 15 tasks are complete. Here's a summary of what was built:
+
+## mhist — Terminal Multiplexer for Mosh Scrollback
+
+### Files Created
+| File | Purpose |
+|------|---------|
+| `main.go` | CLI dispatch: new, attach, ls, kill, --session-id |
+| `buffer.go` | ScrollbackBuffer ring buffer (10k lines) |
+| `buffer_test.go` | 9 buffer unit tests |
+| `protocol.go` | Wire protocol encode/decode (6 message types) |
+| `protocol_test.go` | 11 protocol unit tests |
+| `terminal.go` | Raw mode, mouse mode, screen operations |
+| `mouse.go` | SGR mouse event parsing |
+| `mouse_test.go` | 11 mouse parsing tests |
+| `session.go` | Session process: PTY, buffer, socket listener |
+| `client.go` | Client: connect, raw mode, I/O relay, prefix key, history mode |
+| `test_integration.sh` | 6 integration tests (lifecycle) |
+| `Makefile` | build, test, clean, vet targets |
+
+### Key Features
+- Per-session background process with PTY + scrollback buffer + Unix socket
+- Ctrl+a d to detach, reattach with screen redraw
+- Mouse wheel scrollback through 10k-line buffer
+- Scroll position indicator `[line N/total]` at top-right
+- SIGWINCH handling for terminal resize
+- Clean session lifecycle: create, list, attach, kill, cleanup on exit
+- 31 unit tests + 6 integration tests, all passing
