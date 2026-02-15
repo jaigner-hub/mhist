@@ -30,6 +30,11 @@ type Client struct {
 	termRows      int
 	termCols      int
 
+	// Session switching
+	choosingSession bool
+	sessionChoices  []SessionInfo
+	SwitchTarget    *SessionInfo
+
 	// Exit state
 	detached    bool // true if client initiated detach
 }
@@ -95,12 +100,8 @@ func (c *Client) Run() error {
 	// Wait for either goroutine to finish
 	<-c.done
 
-	// Unblock the other goroutine: close conn (unblocks relaySocket)
-	// and close stdin (unblocks relayStdin)
+	// Close conn to unblock relaySocket
 	c.conn.Close()
-	os.Stdin.Close()
-
-	wg.Wait()
 
 	c.restore()
 	return nil
@@ -144,6 +145,12 @@ func (c *Client) relayStdin() {
 		for i := 0; i < n; i++ {
 			b := buf[i]
 
+			// Session picker input
+			if c.choosingSession {
+				c.handleSessionChoice(b)
+				continue
+			}
+
 			if prefixActive {
 				prefixActive = false
 				switch b {
@@ -153,6 +160,9 @@ func (c *Client) relayStdin() {
 					encoded := Encode(Message{Type: MsgDetach, Payload: nil})
 					c.conn.Write(encoded)
 					return
+				case 's':
+					// Session switcher
+					c.showSessionPicker()
 				case '[':
 					// Enter history/scroll mode
 					if !c.historyMode {
@@ -363,10 +373,9 @@ func (c *Client) relaySocket() {
 
 		switch msg.Type {
 		case MsgData:
-			if !c.historyMode {
+			if !c.historyMode && !c.choosingSession {
 				os.Stdout.Write(msg.Payload)
 			}
-			// In history mode, suppress live output
 
 		case MsgHistoryResponse:
 			c.renderHistory(msg.Payload)
@@ -419,6 +428,86 @@ func (c *Client) signalDone() {
 	c.once.Do(func() {
 		close(c.done)
 	})
+}
+
+// showSessionPicker displays a list of sessions for the user to choose from.
+func (c *Client) showSessionPicker() {
+	c.sessionChoices = listSessions()
+	c.choosingSession = true
+
+	clearScreen(os.Stdout)
+	io.WriteString(os.Stdout, "\x1b[1mSwitch session:\x1b[0m\r\n\r\n")
+
+	for i, info := range c.sessionChoices {
+		shortID := info.ID
+		if len(shortID) > 8 {
+			shortID = shortID[:8]
+		}
+		marker := "  "
+		if info.ID == c.sessionID {
+			marker = "* "
+		}
+		line := fmt.Sprintf("  %s%d) %s [%s]\r\n", marker, i+1, info.Name, shortID)
+		io.WriteString(os.Stdout, line)
+	}
+
+	io.WriteString(os.Stdout, "\r\n  n) New session\r\n")
+	io.WriteString(os.Stdout, "  q) Cancel\r\n\r\n")
+	io.WriteString(os.Stdout, "Choice: ")
+}
+
+// handleSessionChoice processes a keypress while the session picker is shown.
+func (c *Client) handleSessionChoice(b byte) {
+	c.choosingSession = false
+
+	if b == 'n' || b == 'N' {
+		// Switch to a brand new session
+		c.SwitchTarget = &SessionInfo{} // empty = create new
+		encoded := Encode(Message{Type: MsgDetach, Payload: nil})
+		c.conn.Write(encoded)
+		c.detached = true
+		c.signalDone()
+		return
+	}
+
+	if b == 'q' || b == 0x1b {
+		// Cancel — request redraw to restore screen
+		c.sendRedrawRequest()
+		return
+	}
+
+	// Number selection (1-9)
+	idx := int(b-'1')
+	if idx >= 0 && idx < len(c.sessionChoices) {
+		chosen := c.sessionChoices[idx]
+		if chosen.ID == c.sessionID {
+			// Already on this session — cancel
+			c.sendRedrawRequest()
+			return
+		}
+		c.SwitchTarget = &chosen
+		encoded := Encode(Message{Type: MsgDetach, Payload: nil})
+		c.conn.Write(encoded)
+		c.detached = true
+		c.signalDone()
+		return
+	}
+
+	// Invalid key — cancel
+	c.sendRedrawRequest()
+}
+
+// sendRedrawRequest asks the session to resend the current screen.
+func (c *Client) sendRedrawRequest() {
+	rows := c.termRows
+	if rows <= 0 {
+		rows = 24
+	}
+	payload := make([]byte, 8)
+	binary.BigEndian.PutUint32(payload[0:4], uint32(0x80000000))
+	binary.BigEndian.PutUint32(payload[4:8], uint32(rows))
+	encoded := Encode(Message{Type: MsgHistoryRequest, Payload: payload})
+	c.conn.Write(encoded)
 }
 
 // restore restores terminal state and disables mouse mode.

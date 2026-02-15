@@ -108,18 +108,7 @@ func cmdNew(name string) {
 		os.Exit(1)
 	}
 
-	client, err := NewClient(socketPath, id, name)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error connecting to session: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := client.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	printExitMessage(client, name)
+	runClientLoop(socketPath, id, name)
 }
 
 func cmdAttach(target string) {
@@ -130,40 +119,48 @@ func cmdAttach(target string) {
 		os.Exit(1)
 	}
 
-	client, err := NewClient(info.Socket, info.ID, info.Name)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error connecting to session: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := client.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	printExitMessage(client, info.Name)
+	runClientLoop(info.Socket, info.ID, info.Name)
 }
 
 func cmdDefault() {
-	sessions := listSessions()
-	// Try to attach to most recent unoccupied session
-	for i := len(sessions) - 1; i >= 0; i-- {
-		info := sessions[i]
-		client, err := NewClient(info.Socket, info.ID, info.Name)
+	cmdNew("")
+}
+
+// runClientLoop runs the client, handling session switches in a loop.
+func runClientLoop(socketPath, id, name string) {
+	for {
+		client, err := NewClient(socketPath, id, name)
 		if err != nil {
-			continue // can't connect, try next
+			fmt.Fprintf(os.Stderr, "Error connecting to session: %v\n", err)
+			os.Exit(1)
 		}
 
 		if err := client.Run(); err != nil {
-			continue // session rejected us (already attached), try next
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
 		}
 
-		printExitMessage(client, info.Name)
-		return
-	}
+		if client.SwitchTarget == nil {
+			printExitMessage(client, name)
+			return
+		}
 
-	// No available sessions — create new
-	cmdNew("")
+		// Switch to another session
+		target := client.SwitchTarget
+		if target.ID == "" {
+			// Create new session
+			newID := generateID()
+			newName := newID[:8]
+			sp, err := launchSessionProcess(newID, newName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error creating session: %v\n", err)
+				os.Exit(1)
+			}
+			socketPath, id, name = sp, newID, newName
+		} else {
+			socketPath, id, name = target.Socket, target.ID, target.Name
+		}
+	}
 }
 
 func cmdList() {
