@@ -7,13 +7,13 @@ Unlike tmux or screen, mhist doesn't require switching to a "copy mode" to view 
 ## Install
 
 ```bash
-go install github.com/your-username/mhist@latest
+go install github.com/jaigner-hub/mhist@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/your-username/mhist.git
+git clone https://github.com/jaigner-hub/mhist.git
 cd mhist
 make build
 ```
